@@ -93,7 +93,7 @@ All of the above coercions require special handling, and the handling for such i
 	>> doc.document["regexp"]
 	=> /(?i-mx:matches\.*)/
 	
-You can also provide custom Coersions yourself:
+You can also provide custom Coercions yourself:
 
 	>> require 'matrix'
 	>> Triplicate::COERCIONS[Vector] = lambda{|v| Vector.elements(v, true) }
