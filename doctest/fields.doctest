@@ -1,0 +1,150 @@
+    >> $:.unshift File.dirname(__FILE__)
+    doctest_require: 'doctest_helper'
+	doctest_require: '../lib/triplicate'
+
+# Triplicate Fields
+
+Fields are the heart of Triplicate, at first glance but simple getters and setters for attributes in your document:
+	
+	doctest: field defines getters and setters
+	>> class Document
+			include Triplicate
+			field :title
+			end
+	>> doc = Document.new
+	>> doc.title
+	=> nil
+	>> doc.title = "Hello There"
+	=> "Hello There"
+	>> doc.document
+	=> {"title" => "Hello There"}
+
+## Default Values
+
+You can define default values for the document:
+	
+	doctest: field definition with default
+	>> class Document
+			include Triplicate
+			field :author, :default => 'anonymous'
+			end
+	>> doc = Document.new
+	>> doc.author
+	=> "anonymous"
+
+Note that this does not actually set the value:
+
+	>> doc.document['author']
+	=> nil
+
+But only provides a fallback for a missing value:
+
+	>> doc = Document.new('author' => 'mattly')
+	>> doc.author
+	=> "mattly"
+
+## Coercion: Casting, Types, and Validations
+
+Many fields on forms require their input to match certain criteria; you can't just put anything you like in them. Thankfully, Triplicate provides a basic but flexible form of field validation. This 
+
+At the most basic level, we often want our fields to be of a certain class, or to at least coerce the provided value into that class:
+	
+	doctest: field definitions with simple coercion
+	>> class Document
+			include Triplicate
+			field :body, :as => String
+			field :rating, :as => Fixnum
+			field :score, :as => Integer
+			field :rank, :as => Float
+			field :published_at, :as => Time
+			field :rating_range, :as => Range
+			field :regexp, :as => Regexp
+			end
+	>> doc = Document.new
+
+	>> doc.body = 3
+	>> doc.document["body"]
+	=> "3"
+	
+	>> doc.rating = "4.13"
+	>> doc.document["rating"]
+	=> 4
+	
+	>> doc.score = "5.6"
+	>> doc.document["score"]
+	=> 5
+	
+	>> doc.rank = "99.9"
+	>> doc.document["rank"]
+	=> 99.9
+	
+	>> now = Time.now
+	>> doc.published_at = now.iso8601
+	>> doc.document["published_at"].to_i == now.to_i
+	=> true
+	
+	>> ranges = [(2..10), (2...10), (3.14..10), (3.14...10), (2..3.14), (2...3.14), (2.71..3.14), (2.71...3.14)]
+	>> ranges.all? {|range| doc.rating_range = range.to_s; doc.document["rating_range"] == range }
+	=> true
+	
+All of the above coercions require special handling, and the handling for such is provided by a series of Procs in `Triplicate::COERCIONS`, indexed by Class name. Provided no coercion is found for a particular class, Triplicate will fall back to passing the given value to the class's #new method:
+	
+	>> doc.regexp = /matches\.*/i.to_s
+	>> doc.document["regexp"]
+	=> /(?i-mx:matches\.*)/
+	
+You can also provide custom Coersions yourself:
+
+	>> require 'matrix'
+	>> Triplicate::COERCIONS[Vector] = lambda{|v| Vector.elements(v, true) }
+	>> Document.field :vector, :as => Vector
+	>> doc.vector = [3,1,4]
+	>> doc.document["vector"]
+	=> Vector[3,1,4]
+	
+Triplicate also coerces values provided from a loaded document:
+	
+	>> values = {
+		'body' => 3,
+		'rating' => '4.13',
+		'score' => '5.6',
+		'rank' => '99.9', 
+		'published_at' => Time.local(2009, 12, 28, 1, 5, 0).iso8601,
+		'rating_range' => '2..10',
+		'regexp' => "(?i-mx:matches\\.*)"
+		}
+	>> doc = Document.new(values)
+	
+	>> doc.body
+	=> "3"
+
+	>> doc.rating
+	=> 4
+	
+	>> doc.score
+	=> 5
+
+	>> doc.rank
+	=> 99.9
+
+	>> doc.published_at.to_i == Time.parse(values['published_at']).to_i
+	=> true
+
+	>> doc.rating_range
+	=> 2..10
+	
+	>> doc.regexp
+	=> /(?i-mx:matches\.*)/
+
+Note however that if you take advantage of JSON's 'common additions' to core, Time, Range and Regexp won't parse correctly (yet):
+	
+	doctest: fails when common core json extensions are loaded
+	>> require 'json/add/core'
+	>> lambda{ Triplicate.coerce(Time.now.to_json, Time) }.raises_error?
+	=> true
+	>> lambda{ Triplicate.coerce((3..5).to_json, Range) }.raises_error?
+	=> true
+	>> Triplicate.coerce(/regexp\.*/i.to_json, Regexp)
+	=> /{"json_class":"Regexp","o":1,"s":"regexp\\.*"}/
+	
+This will be fixed in a future version of Triplicate
