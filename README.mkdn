@@ -1,0 +1,15 @@
+# Triplicate
+
+by Matthew Lyon <matt@flowerpowered.com>
+
+A document presenter/modification library that attempts to minimize abstraction leakage.
+
+## Philosophy
+
+One of the big selling points of NoSQL-style document storage systems is a schema-free design that promises to free us from ever doing a "migration" or anything resembling `ALTER TABLE` ever again. The APIs for systems such as CouchDB and MongoDB encourage us to use JSON-like hash structures for our data, and yet most document "mapping" libraries around today continue to reflect the belief that getters and setters must be defined for any and all possible fields we may want to access on our data, with as much business logic as possible (validation, callbacks, etc) sitting atop those.
+
+[Objects are not Abstract Data Types](http://stuartsierra.com/2009/12/14/objects-are-not-adts) and our object "mapper" abstraction libraries tend to encourage us to lose sight of this fact. Conflating the object and the data it represents is a slippery slope; before long our models _become_ our data and we have a [leaky abstraction](http://www.joelonsoftware.com/articles/LeakyAbstractions.html). When you no longer think of your data and your model as separate entities, you need an Object database, not a Document database, not a Relational database, not most certainly not a Key/Value store. Go use [Maglev](http://ruby.gemstone.com/).
+
+Yet, raw JSON-like hash structures are fragile things. Perhaps a document contains sensitive information, and sending the entirety of its data out into the world is a bad idea. Perhaps certain facets of the document contain representations of data that our persistence systems can't handle, and need to be interpreted. Perhaps we need some business logic enforced, making sure our data conforms to specified rules. Or perhaps we need to change these rules for some users but not others.
+
+Triplicate aims to solve these problems not by being a "mapper" but by being both a _Presenter_ and a _Processor_, or in other words a [_Form_](http://en.wikipedia.org/wiki/Form_\(document\)).
