@@ -31,6 +31,8 @@ Triplicate field definitions don't define getters and setters on its form object
 Note that because we haven't allowed for random read access, we couldn't read the `random_field` even if there was data in it (more on that later):
 	
 	>> doc.document.update({'random_field' => 'hidden'})
+	>> doc.document
+	=> {"title" => "Hello There", "random_field" => "hidden"}
 	>> doc[:random_field]
 	=> nil
 	
@@ -176,8 +178,12 @@ Triplicate will coerce values from a loaded document into the specified types la
 	=> "3"
 	>> doc.document["body"]
 	=> "3"
-
+	
+	>> doc.document["rating"]
+	=> "4.13"
 	>> doc[:rating]
+	=> 4
+	>> doc.document["rating"]
 	=> 4
 	
 	>> doc[:score]
