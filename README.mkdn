@@ -2,7 +2,7 @@
 
 by Matthew Lyon <matt@flowerpowered.com>
 
-A document presenter/modification library that attempts to minimize abstraction leakage.
+A document presenter/modification library that attempts to minimize abstraction leakage. Forms, not Models.
 
 ## Philosophy
 
@@ -12,4 +12,4 @@ One of the big selling points of NoSQL-style document storage systems is a schem
 
 Yet, raw JSON-like hash structures are fragile things. Perhaps a document contains sensitive information, and sending the entirety of its data out into the world is a bad idea. Perhaps certain facets of the document contain representations of data that our persistence systems can't handle, and need to be interpreted. Perhaps we need some business logic enforced, making sure our data conforms to specified rules. Or perhaps we need to change these rules for some users but not others.
 
-Triplicate aims to solve these problems not by being a "mapper" but by being both a _Presenter_ and a _Processor_, or in other words a [_Form_](http://en.wikipedia.org/wiki/Form_\(document\)).
+Triplicate aims to solve these problems not by being a "mapper" but by being both a _Presenter_ and a _Processor_, or in other words a [_Form_](http://en.wikipedia.org/wiki/Form_(document)).
