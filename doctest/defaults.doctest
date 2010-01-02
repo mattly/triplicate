@@ -1,0 +1,26 @@
+    >> $:.unshift File.dirname(__FILE__)
+    doctest_require: 'doctest_helper'
+
+# Default Values
+
+You can define default values for a particular field:
+	
+	doctest: field definition with default
+	>> class Form < Triplicate
+			field :author, :default => 'anonymous'
+			end
+    >> doc = {}
+	>> form = Form.new(doc)
+	>> form[:author]
+	=> "anonymous"
+
+Note that this does not actually set the value:
+
+	>> doc
+	=> {}
+
+But only provides a fallback for a missing value:
+
+	>> form = Form.new({'author' => 'mattly'})
+	>> form[:author]
+	=> "mattly"

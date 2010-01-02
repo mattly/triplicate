@@ -1,28 +1,81 @@
-require 'time'
-module Triplicate
+class Triplicate < Hash
+  autoload :Coercion, 'lib/coercion'
   
-  def self.included(base)
-    base.extend ClassMethods
+  BUILTIN_VALIDATIONS = [:in, :not_in, :match, :against].freeze
+  
+  def self.field(*keys, &block)
+    opts = keys.last.respond_to?(:has_key?) ? keys.pop : {}
+
+    opts[:validate] = [opts[:validate]].flatten.compact
+    (opts.keys & BUILTIN_VALIDATIONS).each do |validation|
+      opts[:validate].push({validation => opts.delete(validation)})
+    end
+
+    [keys].flatten.each do |key|
+      if block_given?
+        klass = const_set(key.to_s.split('_').map{|s| s.capitalize }.join, Class.new(Triplicate))
+        klass.class_eval &block
+        opts[:coerce] = klass
+      end
+      
+      fields[key.to_s] = {
+        :read => true,
+        :write => true
+      }.update(opts)
+    end
   end
   
-  attr_reader :document
+  def self.fields
+    @fields ||= Hash.new{|hash, key| hash[key] = {} }
+  end
   
   def initialize(doc={})
     @document = doc
+    _cache_document
+    super
+    @document.each {|key, value| self[key.to_s] = value }
   end
   
   def [](key)
+    key = key.to_s
     if readable?(key)
-      key = key.to_s
-      @document[key] = Triplicate.coerce(@document[key], coercion(key))
-      @document[key] || default(key)
+      doc_value = @document[key]
+      if doc_value != nil && doc_value != _cached(key)
+        _cache_document
+        self[key] = doc_value
+      end
+      super(key).nil? ? default(key) : super(key)
     end
   end
   
   def []=(key, value)
     if writeable?(key)
-      @document[key.to_s] = Triplicate.coerce(value, coercion(key))
+      if self[key].is_a?(Triplicate)
+        self[key].update(value)
+        # @document[key.to_s].update(value)
+      else
+        value = coerce(key, value)
+        super(key.to_s, value)
+        if value.is_a?(Triplicate)
+          if @document[key.to_s].nil?
+            @document[key.to_s] = value.instance_variable_get(:@document)
+          end
+        else
+          @document[key.to_s] = serialize(key, value)
+        end
+      end
+      _cache_document
     end
+  end
+  
+  def update(other, &block)
+    other.each do |key, value|
+      if key?(key.to_s) && block_given?
+        value = block.call(key, self[key], value)
+      end
+      self[key] = value
+    end
+    self
   end
   
   def field(key)
@@ -45,72 +98,46 @@ module Triplicate
     field(key)[:coerce]
   end
   
-  module ClassMethods
-    
-    def field(*keys)
-      opts = keys.last.respond_to?(:has_key?) ? keys.pop : {}
-      [keys].flatten.each do |key|
-        fields[key.to_s] = {
-          :read => true,
-          :write => true,
-          :default => opts[:default],
-          :coerce => opts[:coerce]
-        }
-      end
-    end
-    
-    def fields
-      @fields ||= Hash.new{|hash, key| hash[key] = {} }
-    end
-    
-  end
-    
-  COERCIONS = {}
-  COERCIONS[String]         = lambda{|v| v.to_s }
-  COERCIONS[Fixnum]         = lambda{|v| v.to_i }
-  COERCIONS[Integer]        = lambda{|v| v.to_i }
-  COERCIONS[Float]          = lambda{|v| v.to_f }
-  COERCIONS[TrueClass]      = lambda{|v| Triplicate.truthy?(v) }
-  COERCIONS[FalseClass]     = lambda{|v| Triplicate.truthy?(v) }
-  COERCIONS[Time]           = lambda{|v| Time.parse(v) }
-  COERCIONS[Range]          = lambda do |v|
-    raise unless v =~ /^(\d+|\d+\.\d+)(\.{2,3})(\d+|\d+\.\d+)$/
-    start, middle, tail = $1, $2, $3
-    start = start =~ /\./ ? start.to_f : start.to_i
-    tail  = tail  =~ /\./ ? tail.to_f  : tail.to_i
-    Range.new(start, tail, middle == "...")
+  def coerce(key, value)
+    Triplicate::Coercion.coerce(value, coercion(key))
   end
   
-  def self.coerce(value, coercion)
-    if coercion.nil?
-      value
-    elsif value.kind_of?(coercion)
-      value
-    elsif value.is_a?(Hash) && value.has_key?('json_class') && coercion.responds_to?(:json_create)
-      coercion.json_create(value)
-    elsif conversion = COERCIONS[coercion]
-      conversion.call(value)
+  def serialize(key, value)
+    Triplicate::Coercion.serialize(value, coercion(key))
+  end
+  
+  def validations(key)
+    field(key)[:validate]
+  end
+  
+  def valid?(key=nil)
+    if key
+      value = self[key]
+      validations(key).all? do |set|
+        set.all? do |operation, target|
+          case operation
+          when :in
+            target.respond_to?(:include?) && target.include?(value)
+          when :not_in
+            target.respond_to?(:include?) && ! target.include?(value)
+          when :match
+            target.respond_to?(:match) && target.match(value.to_s)
+          when :against
+            target.is_a?(Proc) && target.call(value, self)
+          end
+        end
+      end
     else
-      coercion.new(value)
+      all? {|key, value| valid?(key) }
     end
   end
   
-  def self.truthy?(value)
-    case value
-    when Array
-      arr = value.flatten.compact
-      if arr.size == 1
-        truthy?(arr.first)
-      else
-        !arr.empty?
-      end
-    when String
-      value.strip.gsub(/0+\.?\0*/,'').size > 0
-    when Numeric
-      value != 0
-    else
-      !!value
-    end
+  def _cache_document
+    @cached_document = @document.dup
+  end
+  
+  def _cached(key)
+    @cached_document[key.to_s]
   end
   
 end

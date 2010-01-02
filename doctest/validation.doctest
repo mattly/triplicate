@@ -1,0 +1,83 @@
+    >> $:.unshift File.dirname(__FILE__)
+    doctest_require: 'doctest_helper'
+    
+# Validations
+
+Triplicate has some basic validation patterns built-in:
+    
+    >> class Form < Triplicate
+            field :age, :in => 12..100
+            end
+    >> doc = {}
+    >> form = Form.new(doc)
+    
+Setting a non-valid value will cause the form to fail validation:
+    
+    >> form[:age] = 6
+    >> form.valid?
+    => false
+    >> form.valid?(:age)
+    => false
+    
+However the value will still be there, and by default copied to the document as well:
+    
+    >> form[:age]
+    => 6
+    >> doc['age']
+    => 6
+
+Setting a valid value will clear the invalid status for the field:
+
+    >> form[:age] = 21
+    >> form.valid?(:age)
+    => true
+
+## Standard Validations
+
+`field` observes the following parameters as validations:
+
+`:in`: Given an `Enumerable`, checks to see if the value is a member of the enumerable with `include?`:
+
+    >> Form.field :lucky_number, :in => [7, 42]
+    >> form[:lucky_number] = 23
+    >> form.valid?(:lucky_number)
+    => false
+    >> form[:lucky_number] = 42
+    >> form.valid?(:lucky_number)
+    => true
+    
+`:not_in`: Given an `Enumerable`, checks to see if the value is not a member of the enumerable with `include?`:
+
+    >> Form.field :name, :not_in => %w(admin administrator god root sysop).freeze
+    >> form[:name] = "admin"
+    >> form.valid?(:name)
+    => false
+    >> form[:name] = "mattly"
+    >> form.valid?(:name)
+    => true
+
+`:match`: Given a `Regexp`, checks to see if the value (when coerced to a string) matches the regexp:
+    
+    >> Form.field :name, :match => /\w{4,}/
+    >> form[:name] = "foo"
+    >> form.valid?(:name)
+    => false
+    >> form[:name] = "mattly"
+    >> form.valid?(:name)
+    => true
+    >> form[:name] = 1234
+    >> form.valid?(:name)
+    => true
+    >> form[:name]
+    => 1234
+
+`against`: Given a `Proc`, calls the proc with the value and the form as arguments:
+
+    >> Form.field :nickname, :against => lambda{|val, f| f[:name] != val }
+    >> form[:nickname] = form[:name]
+    >> form.valid?(:nickname)
+    => false
+    >> form[:nickname] = "not the name"
+    >> form.valid?(:nickname)
+    => true
+    

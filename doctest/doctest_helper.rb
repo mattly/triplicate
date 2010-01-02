@@ -1,4 +1,10 @@
 $:.unshift File.dirname(__FILE__) + "/.."
+begin
+  require 'ruby-debug'
+rescue nil
+end
+
+require 'lib/triplicate'
 
 class Proc
   def raises_error?(err=StandardError)

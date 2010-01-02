@@ -1,0 +1,267 @@
+    >> $:.unshift File.dirname(__FILE__)
+    doctest_require: 'doctest_helper'
+
+# Coercions and Serializations
+
+While a JSON-like storage system will typically allow you to store whatever kind of data in whatever field you want, years of conditioning from working with SQL databases and mapping systems have encouraged us to strongly type the fields in our data. While Triplicate will not outright reject data that isn't of a specific type, it will attempt to coerce it into that type.
+
+* [Simple Coercion](#simple_coercion)
+* [Coercion Strategy](#coercion_strategy)
+* [Serialization](#serialization)
+* [Time Values](#time_values)
+* [Range Values](#range_values)
+* [JSON extlib](#json_extlib)
+* [Subforms and Nested Data](#subforms_and_nested_data)
+
+## Simple Coercion
+    
+Triplicate supports coercion attempts to all native JSON types except `null`. It will convert values from the loaded document, and set values in the document to that type:
+
+	>> class Form < Triplicate
+			field :body, :coerce => String
+			field :rating, :coerce => Fixnum
+			field :score, :coerce => Integer
+			field :rank, :coerce => Float
+			end
+	>> doc = {"body" => 1000, "rating" => "4.13", "score" => 5.6, "rank" => "99.9"}
+	>> form = Form.new(doc)
+    
+    >> doc
+    => {"body" => "1000", "rating" => 4, "score" => 5, "rank" => 99.9}
+    
+When the values are written to, it will perform coercion as well:
+
+	>> form[:body] = 3
+	>> form[:body]
+	=> "3"
+	>> doc["body"]
+	=> "3"
+	
+	>> form[:rating] = "4.13"
+	>> form[:rating]
+	=> 4
+	>> doc["rating"]
+	=> 4
+	
+	>> form[:score] = "5.6"
+	>> form[:score]
+	=> 5
+	>> doc["score"]
+	=> 5
+	
+	>> form[:rank] = "99.9"
+	>> form[:rank]
+	=> 99.9
+	>> doc["rank"]
+	=> 99.9
+	
+Booleans are handled by declaring the coercion to be `TrueClass` or `FalseClass`. The field will be set by the truthiness of the value, however truthiness is determined by Javascript rules, not Ruby rules. In addition to `nil` and `false`, blank Strings, zero-value Numerics or numeric-like Strings, empty Arrays or Arrays containing a single value of the previous descriptions are all falsy:
+	
+	>> Form.field :boolean, :coerce => TrueClass
+	>> form[:boolean] = "foo"
+	>> form[:boolean]
+	=> true
+	>> doc['boolean']
+	=> true
+	>> require 'json'
+	>> falsy = [nil, false, [], [[]], [[[]]], [[[[[[[[[[[[[[]]]]]]]]]]]]]],
+				'', ' ', "   \n   ", "\t  ", [''], [[' ']], [[["  \n\r  "]]],
+				'0', '0.0', '  00.00000 ', "\n\r0.00\t\n\r", ['0'], ['0.0'], 
+				0, 0.0, [0], [[0.0]], [nil], [false]
+				]
+	>> falsy.all? do |val|
+			form[:boolean] = val
+			form[:boolean] == false && doc['boolean'] == false
+			end
+	=> true
+
+Values that are already `#kind_of?` the given class will not be coerced:
+
+	>> class MyString < String; end
+	>> form[:body] = MyString.new("foo")
+	>> form[:body].class
+	=> MyString
+	>> doc["body"]
+	=> "foo"
+	>> doc["body"].class
+	=> MyString
+
+However from a loaded document, the value will be coerced into the field's given class, not the original class, unless the provided coercion strategy does that.
+
+## Coercion Strategy
+
+Triplicate performs coercion via `Triplicate::Coercion.coerce(value, class)` and maintains a series of Procs in Triplicate::Coercion::COERCIONS, indexed by class, that tell it how to attempt to coerce a value into that type. For example, here is the Proc for `String`: `lambda{|val| val.to_s }`. Provided no value exists for a particular class, Triplicate will attempt to instantiate an object with that class with the given value via #new:
+
+    doctest: coercion strategies
+    >> Triplicate::Coercion::COERCIONS[Regexp]
+    => nil
+    >> Regexp.new /matches\.*/i.to_s
+    => /(?i-mx:matches\.*)/
+    
+    >> Triplicate::Coercion.coerce(/matches\.*/i.to_s, Regexp)
+    => /(?i-mx:matches\.*)/
+
+    >> require 'set'
+    >> Triplicate::Coercion.coerce([1,6,8], Set)
+    => Set[1,6,8]
+
+You can also provide custom Coercions as needed:
+
+	>> require 'matrix'
+	>> Triplicate::Coercion::COERCIONS[Vector] = lambda{|v| Vector.elements(v, true) }
+	>> Triplicate::Coercion.coerce([3,1,4], Vector)
+	=> Vector[3,1,4]
+
+## Serialization
+
+Being able to present values as members of whatever class you desire may be useful, but if your persistence mechanism can't support objects of that class, there isn't much of a point. This is what serialization strategies are for, to tell Triplicate how to handle storage for various types of objects.
+
+    doctest: serialization
+    >> require 'set'
+    >> Triplicate::Coercion::SERIALIZATIONS[Set] = lambda{|s| s.to_a }
+    >> class Form < Triplicate
+            field :set, :coerce => Set
+            end
+    >> doc = {"set" => %w(fee fie foe)}
+    >> form = Form.new(doc)
+    >> form[:set] += ["fum"]
+    >> form[:set]
+    => Set["fee", "fie", "foe", "fum"]
+    >> doc["set"].sort
+    => %w(fee fie foe fum)
+
+By default Triplicate performs no serialization on given objects; it makes no assumptions about how your document will be interpreted by whatever persistence mechanism you will give it to, and leaves it up to you to make sure your objects are being converted properly: 
+
+* With CouchDB, you might opt to call `#to_json` on your document and rely on any given class's `#to_json` implementation to handle serialization for you. Or perhaps you want to serialize it to another format before `JSON` gets its hands on it. 
+
+* With MongoDB, you are required to give a hash-like object to the driver for saving/updating, not a full-blown JSON string, and as of version 0.18 of the ruby driver it will Segmentation Fault if you give it objects it doesn't like (such as a Set). 
+
+* Maybe you're presenting your document as both CSV and YAML and rather than define several methods for conversion to those formats you'd rather break your values down into primitives yourself.
+
+Note that serialization is for _any_ value for whose class there is a serialization strategy for, not just values that have a defined coercion:
+
+    >> Form.field :stuff
+    >> form[:stuff] = Set[1,10,100]
+    >> doc["stuff"].sort
+    => [1, 10, 100]
+
+## Time Values
+
+Date and Time values can be tricky to represent in other formats, and there are several standards and strategies for doing so. Attempting to coerce a `Numeric` into Time will use `Time.at` and coercing a `String` will use `Time.parse`. This method is not in Standard Library, and will `require 'time'` form extlib should it need to.
+    
+    doctest: coercing Time
+    >> Triplicate::Coercion.coerce(0, Time)
+    => Time.at(0)
+    >> Triplicate::Coercion.coerce("2010-01-01T19:42:43-08:00", Time)
+    => Time.parse("2010-01-01T19:42:43-08:00")
+
+While there are several ISO and RFC standards for representing dates and times as strings, the only one that is supported by both the MRI Ruby Standard Library and the standard Javascript Date object is RFC1123: `day-of-week, DD, month-name CCYY hh:mm:ss GMT`, also known to Ruby's Time as `httpdate`. On the other hand, if you need a format that sorts lexicographically for use in indexes, Time's restricted ISO8601 might be a good choice: `CCYY-MM-DDThh:mm:ss±hh:mm`. If you need to serialize Time to a primitive (MonogDB stores Time objects natively) you can define a serialization strategy like so:
+
+    >> Triplicate::Coercion::SERIALIZATIONS[Time] = lambda{|v| v.utc.iso8601 }
+
+## Range Values
+
+Triplicate supports coercing the output of `Range#to_s` into a Range value:
+
+	>> ranges = [(2..10), (2...10), (3.14..10), (3.14...10), (2..3.14), (2...3.14), (2.71..3.14), (2.71...3.14)]
+	>> ranges.all? do |range| 
+			Triplicate::Coercion.coerce(range.to_s, Range) == range
+			end
+	=> true
+	
+If you plan to store Range objects in MongoDB, you should define a serialization strategy that calls `#to_s` on a range object, as of 0.18 MongoDB's ruby driver will Segmentation Fault when attempting to save a Range object.
+
+## JSON extlib
+	
+If you use JSON's "common additions" to core classes, they will parse correctly when passed in as a Hash:
+	
+	doctest: correctly coerces JSON-parsed hashes of core classes when JSON 'common additions' are loaded
+	>> require 'json/add/core'
+	>> now = Time.now
+	>> Triplicate::Coercion.coerce(JSON.parse(now.to_json), Time).to_i
+	=> now.to_i
+	>> Triplicate::Coercion.coerce(JSON.parse((3..5).to_json), Range)
+	=> 3..5
+	>> Triplicate::Coercion.coerce(JSON.parse(/regexp\.*/i.to_json), Regexp)
+	=> /regexp\.*/i
+	
+Note that while this may be faster than parsing string values the way Triplicate does it, the json structure that json/add/core uses to represent these classes is typically not human-readable or easy to sort on.
+
+## Subforms and Nested Data
+
+One appealing feature of many schema-free databases is the allowance for nested hash-like structures:
+
+    doctest: subforms, coercion and serialization
+    >> doc = {'address' => {'street' => '539 NW 13th', 'city' => 'Portland'}}
+    
+Triplicate has a few methods for handling such structures. You can use Coercion:
+    
+    >> class Address < Triplicate
+            field :street
+            field :city
+            end
+    >> class Form < Triplicate
+            field :address, :coerce => Address
+            end
+    >> form = Form.new(doc)
+    >> form[:address]
+    => {"street" => "539 NW 13th", "city" => "Portland"}
+    >> form[:address][:street]
+    => "539 NW 13th"
+    >> form[:address][:street] = "115 NW Couch"
+    >> form[:address]
+    => {"street" => "115 NW Couch", "city" => "Portland"}
+    >> doc
+    => {"address" => {"street" => "115 NW Couch", "city" => "Portland"}}
+    
+Note that when a field's value is itself a Triplicate object, the document's value for that key is the same object as the field's value's document:
+
+    >> form[:address].class
+    => Address
+    >> doc["address"].class
+    => Hash
+    >> form[:address].instance_variable_get(:@document).object_id == doc["address"].object_id
+    => true
+
+This was set upon creation, but should you outright replace the field's value (instead of updating it) it will still hold true:
+    
+    >> form[:address] = {"street" => "1214 NW 21st", "city" => "Portland"}
+    >> doc["address"]
+    => {"street" => "1214 NW 21st", "city" => "Portland"}
+    >> doc["address"].class
+    => Hash
+    >> doc["address"].object_id == form[:address].instance_variable_get(:@document).object_id
+    => true
+
+This happens even if the original document didn't have a key for the subdocument:
+
+    >> doc = {}
+    >> form = Form.new(doc)
+    >> form[:address] = {"street" => "2403 NE Alberta", "city" => "Portland"}
+    >> doc
+    => {"address" => {"street" => "2403 NE Alberta", "city" => "Portland"}}
+    >> form[:address].class
+    => Address
+    >> doc["address"].class
+    => Hash
+    >> doc["address"].object_id == form[:address].instance_variable_get(:@document).object_id
+    => true
+    
+    
+However for simple one-off cases creating a new class may be unnecessary. If you give a block to `field` it will create this class for you:
+
+    >> doc["address"] = {'street' => '539 NW 13th', 'city' => 'Portland'}
+    >> class OtherForm < Triplicate
+            field :address do
+                field :street
+                field :city
+                end
+            end
+    >> form = OtherForm.new(doc)
+    >> form[:address].kind_of?(Triplicate)
+    => true
+    >> form[:address].class.name
+    => "OtherForm::Address"
+    >> form[:address][:street] = "128 SW 3rd"
+    >> doc["address"]
+    => {"street" => "128 SW 3rd", "city" => "Portland"}

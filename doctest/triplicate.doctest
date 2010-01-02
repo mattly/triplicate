@@ -1,0 +1,67 @@
+    >> $:.unshift File.dirname(__FILE__)
+    doctest_require: 'doctest_helper'
+	>> Triplicate
+	=> Triplicate
+
+# Triplicate Overview
+
+Triplicate field definitions don't define getters and setters on its form objects, but rather grant or deny access to read or write to certain fields. They can interpret fields as certain class types, and confirm certain data patters on write.
+	
+	>> class Form < Triplicate
+			field :title
+			end
+	>> doc = {}
+	>> form = Form.new(doc)
+	>> form[:title]
+	=> nil
+	>> form[:title] = "Hello There"
+	>> form
+	=> {"title" => "Hello There"}
+	>> doc
+	=> {"title" => "Hello There"}
+	>> form[:title]
+	=> "Hello There"
+	
+	>> doc['title'] = "Changed Title"
+	>> form[:title]
+	=> "Changed Title"
+	
+	>> form[:random_field]
+	=> nil
+	>> form[:random_field] = "hahahaha"
+	>> form
+	=> {"title" => "Changed Title"}
+	
+Note that because we haven't allowed for random read access, we couldn't read the `random_field` even if there was data in it (more on that later):
+	
+	>> doc.update({'random_field' => 'hidden'})
+	=> {"random_field" => "hidden", "title" => "Changed Title"}
+	>> form[:random_field]
+	=> nil
+	>> form
+	=> {"title" => "Changed Title"}
+
+Triplicate's `#update` method works similar to `Hash#update`, except it will only copy writable fields:
+    
+    >> form.update({:title => "Updated Title", :random_field => "i haxxor you"})
+    => {"title" => "Updated Title"}
+
+And like `Hash#update` it takes a block in case of a conflict:
+    
+    >> form.update({:title => "Overwritten Title"}) {|key, oldval, newval| oldval }
+    => {"title" => "Updated Title"}
+
+See also:
+
+* [Default Values](defaults.html)
+* [Coercion and Serialization](coercion.html)
+* [Validations](validation.html)
+
+
+
+
+
+
+
+
+
