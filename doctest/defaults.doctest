@@ -28,7 +28,9 @@ This only provides a fallback for a missing value:
 Alternately, you can define default values. Provided there is no existing truthy value, these will be set on the document the first time the field is accessed, including when `#process!` is called.
 
     doctest: field definition with a default
-    >> Form.field :language, :default => "English"
+    >> class Form < Triplicate
+            field :language, :default => "English"
+            end
     >> doc = {}
     >> form = Form.new(doc)
     >> doc["language"]
