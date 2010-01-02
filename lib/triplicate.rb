@@ -1,5 +1,5 @@
 class Triplicate < Hash
-  autoload :Coercion, 'lib/coercion'
+  autoload :Coercion, "#{File.dirname(__FILE__)}/coercion"
   
   BUILTIN_VALIDATIONS = [:in, :not_in, :match, :against].freeze
   
