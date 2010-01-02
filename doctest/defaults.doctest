@@ -62,3 +62,15 @@ If you supply a Proc to either `:placeholder` or `:default`, it will be instance
     >> doc["count2"]
     => "thing: 1"
 
+If you haven't yet accessed a field with a default by the time `#process!` is called, it will be set then:
+    
+    doctest: field definitions with defaults get set on #process!
+    >> class Form < Triplicate
+            field :updated_at, :default => lambda{ Time.now }
+            end
+    >> doc = {}
+    >> form = Form.new(doc)
+    >> now = Time.now
+    >> form.process!
+    >> doc["updated_at"].to_i == now.to_i
+    => true

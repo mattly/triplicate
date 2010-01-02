@@ -94,6 +94,10 @@ class Triplicate < Hash
         self[key] = coerce(key, value)
       end
     end
+    self.class.fields.each do |name, opts|
+      next if key?(name)
+      self[name] if opts[:default]
+    end
   end
   
   def update(other, &block)
