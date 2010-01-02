@@ -247,7 +247,6 @@ This happens even if the original document didn't have a key for the subdocument
     >> doc["address"].object_id == form[:address].instance_variable_get(:@document).object_id
     => true
     
-    
 However for simple one-off cases creating a new class may be unnecessary. If you give a block to `field` it will create this class for you:
 
     >> doc["address"] = {'street' => '539 NW 13th', 'city' => 'Portland'}
