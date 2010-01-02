@@ -54,9 +54,9 @@ And like `Hash#update` it takes a block in case of a conflict:
 See also:
 
 * [Default Values](defaults.html)
-* [Coercion and Serialization](coercion.html)
+* [Coercion and Serialization](coercions.html)
+* [Collections](collections.html)
 * [Validations](validation.html)
-
 
 
 

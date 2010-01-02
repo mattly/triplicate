@@ -40,29 +40,31 @@ Alternately, you can define default values. Provided there is no existing truthy
     >> doc
     => {"language" => "English"}
 
-If you supply a Proc to either `:placeholder` or `:default`, it will be instance_eval'd on the form. Note that a placeholder Proc will be called *each time* the placeholder is accessed.
+If you supply a Proc to either `:placeholder` or `:default`, it will be instance_eval'd on an `OpenStruct` representation of the form. Note that a placeholder Proc will be called *each time* the placeholder is accessed.
 
     doctest: field definitions with default and placeholder procs
     >> class Form < Triplicate
             field :value
-            field :count1, :placeholder => lambda{ @a ||= 0; @a += 1; "#{self[:value]}: #{@a}" }
-            field :count2, :default => lambda{ @b ||= 0; @b += 1; "#{self[:value]}: #{@b}" }
+            field :empty, :placeholder => lambda{ value }
+            field :defaulted, :default => lambda{ value }
             end
     >> doc = {"value" => "thing"}
     >> form = Form.new(doc)
-    >> form[:count1]
-    => "thing: 1"
-    >> form[:count1]
-    => "thing: 2"
-    >> doc["count1"]
+    >> form[:empty]
+    => "thing"
+    >> form[:value] = "another"
+    >> form[:empty]
+    => "another"
+    >> doc["empty"]
     => nil
     
-    >> form[:count2]
-    => "thing: 1"
-    >> form[:count2]
-    => "thing: 1"
-    >> doc["count2"]
-    => "thing: 1"
+    >> form[:defaulted]
+    => "another"
+    >> form[:value] = "yet another"
+    >> form[:defaulted]
+    => "another"
+    >> doc["defaulted"]
+    => "another"
 
 If you haven't yet accessed a field with a default by the time `#process!` is called, it will be set then:
     
