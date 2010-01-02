@@ -1,7 +1,7 @@
     >> $:.unshift File.dirname(__FILE__)
     doctest_require: 'doctest_helper'
 
-# Default and Placeholder Values
+# Something From Nothing: Placeholders and Defaults
 
 You can define placeholder values for a particular field, if the value is missing, the placeholder will be offered instead:
 	
