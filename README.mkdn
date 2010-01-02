@@ -2,14 +2,59 @@
 
 by Matthew Lyon <matt@flowerpowered.com>
 
-A document presenter/modification library that attempts to minimize abstraction leakage. Forms, not Models.
+A document presenter/processor library that attempts to minimize abstraction leakage. Forms, not Models.
 
 ## Philosophy
 
-One of the big selling points of NoSQL-style document storage systems is a schema-free design that promises to free us from ever doing a "migration" or anything resembling `ALTER TABLE` ever again. The APIs for systems such as CouchDB and MongoDB encourage us to use JSON-like hash structures for our data, and yet most document "mapping" libraries around today continue to reflect the belief that getters and setters must be defined for any and all possible fields we may want to access on our data, with as much business logic as possible (validation, callbacks, etc) sitting atop those.
+One of the big selling points of NoSQL-style document storage systems is a schema-free design that promises to free us from ever doing a "migration" or anything resembling `ALTER TABLE` ever again. The APIs for systems such as CouchDB and MongoDB allow JSON-like nested, open-key hash/dict structures for our data, a freedom from the flat, restricted-key hash/dict structures that SQL table rows impose on us.
 
-[Objects are not Abstract Data Types](http://stuartsierra.com/2009/12/14/objects-are-not-adts) and our object "mapper" abstraction libraries tend to encourage us to lose sight of this fact. Conflating the object and the data it represents is a slippery slope; before long our models _become_ our data and we have a [leaky abstraction](http://www.joelonsoftware.com/articles/LeakyAbstractions.html). When you no longer think of your data and your model as separate entities, you need an Object database, not a Document database, not a Relational database, not most certainly not a Key/Value store. Go use [Maglev](http://ruby.gemstone.com/).
+Yet raw hash/dict structures are fragile things and the real world is a tough place. We expect that certain values will conform to certain datatypes or match certain constraints. We deal with untrustworthy user input and need to restrict write access, or we're sending our document out into the wide world and need to mask certain information. We may need to store objects of types our persistence systems don't know how to deal with, and need to serialize and reconstitute them.
 
-Yet, raw JSON-like hash structures are fragile things. Perhaps a document contains sensitive information, and sending the entirety of its data out into the world is a bad idea. Perhaps certain facets of the document contain representations of data that our persistence systems can't handle, and need to be interpreted. Perhaps we need some business logic enforced, making sure our data conforms to specified rules. Or perhaps we need to change these rules for some users but not others.
+Thus we have Models. Models enforce our business logic for us, they handle our persistence layer for us, and they add domain-specific logic to our data for us. What's not to love?
 
-Triplicate aims to solve these problems not by being a "mapper" but by being both a _Presenter_ and a _Processor_, or in other words a [_Form_](http://en.wikipedia.org/wiki/Form_(document)).
+> "Objects are not Abstract Data Types" -- Barbara Liskov
+
+If we're not careful our models _become_ our data in our minds, and conflating the model object and the data it is meant to represent is a slippery slope. Before long we use our relational or document database to persist our objects instead of our data -- it's a wonder no one has come up with a "NoSQL"-style mapper that performs `Marshal.dump` on an object to "save" it.
+
+Heeding the "Thin Controller / Fat Model" mantra made popular in the Rails community can lead to some downright monstrous model classes, that do everything we might conceivably need with the model's data. While thin Controllers are definitely a good idea, making fat Models instead only shifts the problems around. If we're not careful we end up doing the OO equivalent of telling a box to ship itself to Germany -- something that a box has no business knowing how to do. With our love for monkeypatching, the Ruby community in particular is especially prone to this kind of abstraction leakage.
+
+> "There should never be more than one reason for a class to change" -- Robert Martin
+
+The complexity this approach to Model design encourages also makes code difficult to maintain. If a model for an invoice knows how to calculate its amounts based on its data, figure out how to ship itself to various locations, or format its data for display or printing, then it has multiple responsibilities and has become fragile.
+
+Triplicate aims to solve the complexity problem by providing a minimal layer of presentation and processing logic over your documents. The presentation layer is concerned with representing your data in various ways, and the processing layer makes sure it conforms to various rules.
+
+## TODO / Sketchpad
+
+* setters, direct values & procs
+* references
+	- caching entire document or list of fields
+	- way to read references
+	- referencedBy
+* read-only fields
+* free-write access
+* overflow fields
+* filters
+	- proxy documents? or too edge case
+* process blocks to be called on #process!
+* "prevent blind updates"
+* display fields (perhaps read-only, with defaults as procs?)
+* state machine
+
+
+display :thing, ->{ "#{something}: #{else}" }
+
+field :type, default: 'User', protect: true
+protected_field:
+hidden_field :type, 'User'
+
+
+field :another, protect: true
+field :created_at, set: ->(val){ val || Time.now }, protect: true
+field :updated_at, set: ->{ Time.now }, protect: true
+
+field :amount, :match => /^(\d+)%?$/
+display :percent, ->{ amount.match(/%$/) }
+display :total, ->{ percent ? parent.pretotal * amount/100.0 : amount }
+
+overflow :etcetera
