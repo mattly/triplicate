@@ -1,5 +1,4 @@
 * setters, direct values & procs
-* defaults with procs
 * references
 	- caching entire document or list of fields
 	- way to read references

@@ -62,7 +62,7 @@ By default the collection will be an Array, but you may specify any enumerable b
     >> form[:attendees]["jane"]
     => true
     >> form[:attendees]["mark"] = "0" # remember, we're using javascript falsiness
-    >> form.process
+    >> form.process!
     >> doc
     => {"attendees" => {"jane" => true, "mark" => false}}
 

@@ -32,7 +32,6 @@ class Triplicate < Hash
   def initialize(doc={})
     @document = doc
     _cache_document
-    super
     @document.each {|key, value| self[key.to_s] = value }
     self.class.fields.each do |name, opts|
       next if @document.keys.include?(name)
@@ -43,12 +42,30 @@ class Triplicate < Hash
   def [](key)
     key = key.to_s
     if readable?(key)
-      doc_value = @document[key]
-      if doc_value != nil && doc_value != _cached(key)
-        _cache_document
-        self[key] = doc_value
+      _cached(key, true)
+      if super(key).nil?
+        if default = field(key)[:default]
+          value = if default.is_a?(Proc)
+            instance_eval(&default)
+          else
+            default
+          end
+        end
+        if value = coerce(key, value)
+          @document[key] = serialize(key, value)
+          value
+        else
+          if placeholder = field(key)[:placeholder]
+            if placeholder.is_a?(Proc)
+              instance_eval(&placeholder)
+            else
+              placeholder
+            end
+          end
+        end
+      else
+        super(key)
       end
-      super(key).nil? ? default(key) : super(key)
     end
   end
   
@@ -71,7 +88,7 @@ class Triplicate < Hash
     end
   end
   
-  def process
+  def process!
     each do |key, value|
       if self[key] != coerce(key, value)
         self[key] = coerce(key, value)
@@ -103,10 +120,6 @@ class Triplicate < Hash
   
   def collection?(key)
     field(key)[:collection]
-  end
-  
-  def default(key)
-    field(key)[:default]
   end
   
   def coercion(key)
@@ -179,8 +192,16 @@ class Triplicate < Hash
     @cached_document = @document.dup
   end
   
-  def _cached(key)
-    @cached_document[key.to_s]
+  def _cached(key, force=false)
+    if force
+      doc_value = @document[key]
+      if doc_value != nil && doc_value != _cached(key)
+        _cache_document
+        self[key] = doc_value
+      end
+    else
+      @cached_document[key.to_s]
+    end
   end
   
 end

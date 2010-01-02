@@ -1,26 +1,64 @@
     >> $:.unshift File.dirname(__FILE__)
     doctest_require: 'doctest_helper'
 
-# Default Values
+# Default and Placeholder Values
 
-You can define default values for a particular field:
+You can define placeholder values for a particular field, if the value is missing, the placeholder will be offered instead:
 	
-	doctest: field definition with default
+	doctest: field definition with a placeholder
 	>> class Form < Triplicate
-			field :author, :default => 'anonymous'
+			field :author, :placeholder => 'anonymous'
 			end
     >> doc = {}
 	>> form = Form.new(doc)
 	>> form[:author]
 	=> "anonymous"
-
-Note that this does not actually set the value:
+    
+However this does not set any actual values:
 
 	>> doc
 	=> {}
 
-But only provides a fallback for a missing value:
+This only provides a fallback for a missing value:
 
 	>> form = Form.new({'author' => 'mattly'})
 	>> form[:author]
 	=> "mattly"
+
+Alternately, you can define default values. Provided there is no existing truthy value, these will be set on the document the first time the field is accessed, including when `#process!` is called.
+
+    doctest: field definition with a default
+    >> Form.field :language, :default => "English"
+    >> doc = {}
+    >> form = Form.new(doc)
+    >> doc["language"]
+    => nil
+    >> form[:language]
+    => "English"
+    >> doc
+    => {"language" => "English"}
+
+If you supply a Proc to either `:placeholder` or `:default`, it will be instance_eval'd on the form. Note that a placeholder Proc will be called *each time* the placeholder is accessed.
+
+    doctest: field definitions with default and placeholder procs
+    >> class Form < Triplicate
+            field :value
+            field :count1, :placeholder => lambda{ @a ||= 0; @a += 1; "#{self[:value]}: #{@a}" }
+            field :count2, :default => lambda{ @b ||= 0; @b += 1; "#{self[:value]}: #{@b}" }
+            end
+    >> doc = {"value" => "thing"}
+    >> form = Form.new(doc)
+    >> form[:count1]
+    => "thing: 1"
+    >> form[:count1]
+    => "thing: 2"
+    >> doc["count1"]
+    => nil
+    
+    >> form[:count2]
+    => "thing: 1"
+    >> form[:count2]
+    => "thing: 1"
+    >> doc["count2"]
+    => "thing: 1"
+
