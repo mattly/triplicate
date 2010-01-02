@@ -141,7 +141,7 @@ class Triplicate < Hash
   end
   
   def _build_collection(key, value, meth)
-    if collection?(key) == Hash
+    if collection?(key).ancestors.include?(Hash)
       value.each {|k,v| value[k] = send(meth, key, v, true) }
     elsif collection?(key).is_a?(Class)
       send(meth, nil, collection?(key).new(value.map{|v| send(meth, key, v, true) }), true)
