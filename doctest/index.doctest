@@ -5,6 +5,9 @@
 
 # Triplicate Overview
 
+
+## Fields: Keys and Values, not Methods
+
 Triplicate field definitions don't define getters and setters on its form objects, but rather grant or deny access to read or write to certain fields. They can interpret fields as certain class types, and confirm certain data patters on write.
 	
 	>> class Form < Triplicate

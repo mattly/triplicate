@@ -14,7 +14,7 @@ Thus we have Models. Models enforce our business logic for us, they handle our p
 
 > "Objects are not Abstract Data Types" -- Barbara Liskov
 
-If we're not careful our models _become_ our data in our minds, and conflating the model object and the data it is meant to represent is a slippery slope. Before long we use our relational or document database to persist our objects instead of our data -- it's a wonder no one has come up with a "NoSQL"-style mapper that performs `Marshal.dump` on an object to "save" it.
+If we're not careful our models _become_ our data in our minds, and conflating the model object and the data it is meant to represent is a slippery slope. Before long we use our relational or document database to persist our objects instead of our data -- if it weren't for incompatibilities between ruby versions, we could just `Marshal.dump` our objects into a text field and be done with it.
 
 Heeding the "Thin Controller / Fat Model" mantra made popular in the Rails community can lead to some downright monstrous model classes, that do everything we might conceivably need with the model's data. While thin Controllers are definitely a good idea, making fat Models instead only shifts the problems around. If we're not careful we end up doing the OO equivalent of telling a box to ship itself to Germany -- something that a box has no business knowing how to do. With our love for monkeypatching, the Ruby community in particular is especially prone to this kind of abstraction leakage.
 
