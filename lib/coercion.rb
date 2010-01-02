@@ -1,12 +1,14 @@
 class Triplicate
   module Coercion
     COERCIONS = {}
-    COERCIONS[String]         = lambda{|v| v.to_s }
-    COERCIONS[Fixnum]         = lambda{|v| v.to_i }
-    COERCIONS[Integer]        = lambda{|v| v.to_i }
-    COERCIONS[Float]          = lambda{|v| v.to_f }
     COERCIONS[TrueClass]      = lambda{|v| Triplicate::Coercion.truthy?(v) }
     COERCIONS[FalseClass]     = lambda{|v| Triplicate::Coercion.truthy?(v) }
+    COERCIONS[Fixnum]         = :to_i
+    COERCIONS[Integer]        = :to_i
+    COERCIONS[Float]          = :to_f
+    COERCIONS[String]         = lambda do |v|
+      v.respond_to?(:join) ? v.join(", ") : v.to_s
+    end
 
     COERCIONS[Time]           = lambda do |v|
       if v.is_a?(Numeric)
@@ -39,7 +41,12 @@ class Triplicate
       elsif value.is_a?(Hash) && value.has_key?('json_class') && klass.responds_to?(:json_create)
         klass.json_create(value)
       elsif conversion = COERCIONS[klass]
-        conversion.call(value)
+        case conversion
+        when Proc
+          conversion.call(value)
+        when Symbol
+          value.send conversion
+        end
       else
         klass.new(value)
       end
@@ -47,7 +54,12 @@ class Triplicate
     
     def self.serialize(value, klass)
       if serializer = (SERIALIZATIONS[klass] || SERIALIZATIONS[value.class])
-        serializer.call(value)
+        case serializer
+        when Proc
+          serializer.call(value)
+        when Symbol
+          value.send serializer
+        end
       else
         value
       end

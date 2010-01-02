@@ -1,6 +1,5 @@
 * setters, direct values & procs
 * defaults with procs
-* collection fields
 * references
 	- caching entire document or list of fields
 	- way to read references

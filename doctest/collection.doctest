@@ -1,0 +1,86 @@
+    >> $:.unshift File.dirname(__FILE__)
+    doctest_require: 'doctest_helper'
+    
+# Collections
+
+Triplicate fields can be marked as "collections" for the purpose of instructing coercion, serialization, and validation functions to look at the individual elements of an Enumerable rather than the whole thing.
+
+Coercions, reading from the document:
+
+    >> doc = {"things" => [4, "foo", [1,2]]}
+    >> class StringThings < Triplicate
+            field :things, :collection => true, :coerce => String
+            end
+    >> form = StringThings.new(doc)
+    >> form[:things]
+    => ["4", "foo", "1, 2"]
+    >> doc
+    => {"things" => ["4", "foo", "1, 2"]}
+
+Serialization, from `[]=` value:
+
+    >> require 'set'
+    >> Triplicate::Coercion::SERIALIZATIONS[Set] = :to_a
+    >> class SetServe < Triplicate
+            field :sets, :collection => true, :coerce => Set
+            end
+    >> doc = {}
+    >> form = SetServe.new(doc)
+    >> form[:sets]
+    => []
+    >> form[:sets] = [[5,0,3]]
+    >> form[:sets]
+    => [Set[5,0,3]]
+    >> doc
+    => {"sets" => [[5,0,3]]}
+
+Validations:
+    
+    >> class Scores < Triplicate
+            field :history, :collection => true, :in => 1..100
+            end
+    >> doc = {}
+    >> form = Scores.new(doc)
+    >> form[:history]
+    => []
+    >> form[:history] = [4, 8, 15, 16, 23, 42]
+    >> form[:history]
+    => [4, 8, 15, 16, 23, 42]
+    >> form.valid?(:history)
+    => true
+    >> form[:history].push(108)
+    >> form.valid?(:history)
+    => false
+    
+By default the collection will be an Array, but you may specify any enumerable by supplying a class name as the `:collection` value, such as a `Set`, or even a `Hash`:
+    
+    >> doc = {"attendees" => {"jane" => "attending"}}
+    >> class Party < Triplicate
+            field :attendees, :collection => Hash, :coerce => TrueClass
+            end
+    >> form = Party.new(doc)
+    >> form[:attendees]["jane"]
+    => true
+    >> form[:attendees]["mark"] = "0" # remember, we're using javascript falsiness
+    >> form.process
+    >> doc
+    => {"attendees" => {"jane" => true, "mark" => false}}
+
+Here's an example with a `Set` collection and validations:
+
+    >> doc = { "emails" => %w(matt@flowerpowered.com matt@entp.com) }
+    >> class ValidCollections < Triplicate
+            field :emails, :collection => Set, :match => /[^@]+@[-a-z0-9\.]+\.[a-z]{2,}/i
+            end
+    >> form = ValidCollections.new(doc)
+    >> form.valid?(:emails)
+    => true
+    >> form[:emails] << "blah"
+    >> form.valid?(:emails)
+    => false
+    >> form[:emails].delete("blah")
+    >> form[:emails].size
+    => 2
+    >> form[:emails] << doc["emails"].first
+    >> form[:emails].size
+    => 2

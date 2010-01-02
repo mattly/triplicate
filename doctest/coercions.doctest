@@ -132,9 +132,9 @@ Being able to present values as members of whatever class you desire may be usef
 
 By default Triplicate performs no serialization on given objects; it makes no assumptions about how your document will be interpreted by whatever persistence mechanism you will give it to, and leaves it up to you to make sure your objects are being converted properly: 
 
-* With CouchDB, you might opt to call `#to_json` on your document and rely on any given class's `#to_json` implementation to handle serialization for you. Or perhaps you want to serialize it to another format before `JSON` gets its hands on it. 
+* With CouchDB, you might opt to call `#to_json` on your document and rely on any given class's `#to_json` implementation to handle serialization for you. Or perhaps you want to serialize it to a more primitive datatype before `JSON` gets its hands on it. 
 
-* With MongoDB, you are required to give a hash-like object to the driver for saving/updating, not a full-blown JSON string, and as of version 0.18 of the ruby driver it will Segmentation Fault if you give it objects it doesn't like (such as a Set). 
+* With MongoDB, you are required to give a hash-like object to the driver for saving/updating, not a full-blown JSON string, and as of version 0.18 of the ruby driver it will Segmentation Fault if you give it objects it doesn't like (such as a Set). You *could* serialize `#to_json` and back, but serialization strategies offer an alternative.
 
 * Maybe you're presenting your document as both CSV and YAML and rather than define several methods for conversion to those formats you'd rather break your values down into primitives yourself.
 
