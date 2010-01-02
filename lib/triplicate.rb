@@ -44,25 +44,8 @@ class Triplicate < Hash
     if readable?(key)
       _cached(key, true)
       if super(key).nil?
-        if default = field(key)[:default]
-          value = if default.is_a?(Proc)
-            instance_eval(&default)
-          else
-            default
-          end
-        end
-        if value = coerce(key, value)
-          @document[key] = serialize(key, value)
-          value
-        else
-          if placeholder = field(key)[:placeholder]
-            if placeholder.is_a?(Proc)
-              instance_eval(&placeholder)
-            else
-              placeholder
-            end
-          end
-        end
+        if _set_default(key) then super(key)
+        else _value_or_exec(field(key)[:placeholder]) end
       else
         super(key)
       end
@@ -71,7 +54,7 @@ class Triplicate < Hash
   
   def []=(key, value)
     if writeable?(key)
-      if self[key].is_a?(Triplicate)
+      if !_raw and self[key].is_a?(Triplicate)
         self[key].update(value)
       else
         value = coerce(key, value)
@@ -96,7 +79,7 @@ class Triplicate < Hash
     end
     self.class.fields.each do |name, opts|
       next if key?(name)
-      self[name] if opts[:default]
+      _set_default(name) if opts[:default]
     end
   end
   
@@ -108,6 +91,15 @@ class Triplicate < Hash
       self[key] = value
     end
     self
+  end
+  
+  def to_ostruct
+    begin
+      OpenStruct.new(self)
+    rescue NameError
+      require 'ostruct'
+      retry
+    end
   end
   
   def field(key)
@@ -201,10 +193,37 @@ class Triplicate < Hash
       doc_value = @document[key]
       if doc_value != nil && doc_value != _cached(key)
         _cache_document
-        self[key] = doc_value
+        _raw { self[key] = doc_value }
+        self[key]
       end
     else
       @cached_document[key.to_s]
+    end
+  end
+  
+  def _raw(&block)
+    if block_given?
+      @raw_access = true
+      yield
+      @raw_access = nil
+    else
+      @raw_access || nil
+    end
+  end
+  
+  def _value_or_exec(thing)
+    if thing.is_a?(Proc)
+      to_ostruct.instance_eval(&thing)
+    else
+      thing
+    end
+  end
+  
+  def _set_default(key)
+    value = _value_or_exec field(key)[:default]
+    if value = coerce(key, value)
+      @document[key] = serialize(key, value)
+      _cached(key, true)
     end
   end
   
