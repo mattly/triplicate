@@ -14,15 +14,15 @@ Thus we have Models. Models enforce our business logic for us, they handle our p
 
 > "Objects are not Abstract Data Types" -- Barbara Liskov
 
-If we're not careful our models _become_ our data in our minds, and conflating the model object and the data it is meant to represent is a slippery slope. Before long we use our relational or document database to persist our objects instead of our data -- if it weren't for incompatibilities between ruby versions, we could just `Marshal.dump` our objects into a text field and be done with it.
+If we're not careful our models _become_ our data in our minds, and conflating the model object and the data it is meant to represent is a slippery slope. Before long we use our relational or document database to persist our objects instead of our data -- if it weren't for incompatibilities between ruby versions, we might as well just `Marshal.dump` our objects into a blob field and be done with it.
 
-Heeding the "Thin Controller / Fat Model" mantra made popular in the Rails community can lead to some downright monstrous model classes, that do everything we might conceivably need with the model's data. While thin Controllers are definitely a good idea, making fat Models instead only shifts the problems around. If we're not careful we end up doing the OO equivalent of telling a box to ship itself to Germany -- something that a box has no business knowing how to do. With our love for monkeypatching, the Ruby community in particular is especially prone to this kind of abstraction leakage.
+Heeding the "Thin Controller / Fat Model" mantra made popular in the Rails community can lead to some downright monstrous model classes that do everything we might conceivably need with the model's data. While thin Controllers are definitely a good idea, making fat Models instead only shifts the problems around. If we're not careful we end up doing the OO equivalent of telling a box to ship itself to Germany -- something that a box has no business knowing how to do. With our love for monkeypatching, the Ruby community in particular is especially prone to this kind of abstraction leakage.
 
 > "There should never be more than one reason for a class to change" -- Robert Martin
 
 The complexity this approach to Model design encourages also makes code difficult to maintain. If a model for an invoice knows how to calculate its amounts based on its data, figure out how to ship itself to various locations, or format its data for display or printing, then it has multiple responsibilities and has become fragile.
 
-Triplicate aims to solve the complexity problem by providing a minimal layer of presentation and processing logic over your documents. The presentation layer is concerned with representing your data in various ways, and the processing layer makes sure it conforms to various rules.
+Triplicate aims to solve the complexity problem by providing a minimal layer of presentation and processing logic over your documents. The presentation layer is concerned with representing your data in various ways, and the processing layer makes sure it conforms to various rules and handing it off to various Observers.
 
 ## TODO / Sketchpad
 
@@ -40,7 +40,7 @@ Triplicate aims to solve the complexity problem by providing a minimal layer of 
 * "prevent blind updates"
 * display fields (perhaps read-only, with defaults as procs?)
 * state machine
-
+* rework fields to own class/module, so they're not cluttering up triplicate.rb
 
 display :thing, ->{ "#{something}: #{else}" }
 

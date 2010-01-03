@@ -163,6 +163,7 @@ While there are several ISO and RFC standards for representing dates and times a
 
 Triplicate supports coercing the output of `Range#to_s` into a Range value:
 
+    doctest: coercing Range
 	>> ranges = [(2..10), (2...10), (3.14..10), (3.14...10), (2..3.14), (2...3.14), (2.71..3.14), (2.71...3.14)]
 	>> ranges.all? do |range| 
 			Triplicate::Coercion.coerce(range.to_s, Range) == range
@@ -264,3 +265,12 @@ However for simple one-off cases creating a new class may be unnecessary. If you
     >> form[:address][:street] = "128 SW 3rd"
     >> doc["address"]
     => {"street" => "128 SW 3rd", "city" => "Portland"}
+
+## TODO
+
+* multiple serialization strategies
+    basically, so that we can serialize to CouchDB and MongoDB from within the same ruby session
+    * default settable per-class
+    * overridable per instance
+* option to set falsiness to ruby or javascript rules, perhaps ability to provide own. Like serialization, should be settable per-class or instance
+* ability to clone the doc using different serialization rules

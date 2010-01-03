@@ -35,7 +35,7 @@ Triplicate field definitions don't define getters and setters on its form object
 	>> form
 	=> {"title" => "Changed Title"}
 	
-Note that because we haven't allowed for random read access, we couldn't read the `random_field` even if there was data in it (more on that later):
+Note that because we haven't allowed for random read access, we couldn't read the `random_field` even if there was data in it:
 	
 	>> doc.update({'random_field' => 'hidden'})
 	=> {"random_field" => "hidden", "title" => "Changed Title"}
