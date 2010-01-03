@@ -233,12 +233,15 @@ This was set upon creation, but should you outright replace the field's value (i
     => Hash
     >> doc["address"].object_id == form[:address].instance_variable_get(:@document).object_id
     => true
+    TODO: this uses #update, not #replace, and will not remove values
 
 This happens even if the original document didn't have a key for the subdocument:
 
     >> doc = {}
     >> form = Form.new(doc)
     >> form[:address] = {"street" => "2403 NE Alberta", "city" => "Portland"}
+    >> form
+    => {"address" => {"street" => "2403 NE Alberta", "city" => "Portland"}}
     >> doc
     => {"address" => {"street" => "2403 NE Alberta", "city" => "Portland"}}
     >> form[:address].class

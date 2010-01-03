@@ -1,51 +1,59 @@
+require 'forwardable'
+require 'ostruct'
 class Triplicate < Hash
-  autoload :Coercion, "#{File.dirname(__FILE__)}/coercion"
+  extend Forwardable
+  
+  %w(coercion field).each do |req|
+    mod = req.split(/[-_]/).map{|w|w.capitalize}.join
+    autoload mod, "lib/triplicate/#{req}"
+  end
   
   BUILTIN_VALIDATIONS = [:in, :not_in, :match, :against].freeze
   
   def self.field(*keys, &block)
     opts = keys.last.respond_to?(:has_key?) ? keys.pop : {}
-
-    opts[:validate] = [opts[:validate]].flatten.compact
+    
+    opts[:validations] = [opts.delete(:validate)].flatten.compact
     (opts.keys & BUILTIN_VALIDATIONS).each do |validation|
-      opts[:validate].push({validation => opts.delete(validation)})
+      opts[:validations].push({validation => opts.delete(validation)})
     end
+    opts[:coercion] = opts.delete(:coerce)
+    opts.update({:readable? => true, :writeable? => true}) {|k,v1,v2| v1 }
 
     [keys].flatten.each do |key|
       if block_given?
         klass = const_set(key.to_s.split('_').map{|s| s.capitalize }.join, Class.new(Triplicate))
         klass.class_eval &block
-        opts[:coerce] = klass
+        opts[:coercion] = klass
       end
       
-      fields[key.to_s] = {
-        :read => true,
-        :write => true
-      }.update(opts)
+      fields[key.to_s] = Field::Declaration.new(opts.update({:name => key.to_s, :parent => self}))
     end
   end
   
   def self.fields
-    @fields ||= Hash.new{|hash, key| hash[key] = {} }
+    @fields ||= Hash.new {|h,k| k == k.to_s ? Field::Declaration.new : h[k.to_s] }
   end
   
   def initialize(doc={})
-    @document = doc
+    @document = doc || {}
+    _without_caching { @document.each {|key, value| self[key] = value } }
     _cache_document
-    @document.each {|key, value| self[key.to_s] = value }
-    self.class.fields.each do |name, opts|
+    fields.each do |name, field|
       next if @document.keys.include?(name)
-      self[name] = [] if opts[:collection]
+      self[name] = field.collection.new if field.collection
     end
   end
   
+  def_delegators :"self.class", :fields
+  
   def [](key)
     key = key.to_s
-    if readable?(key)
+    if fields[key].readable?
       _cached(key, true)
-      if super(key).nil?
+      if super(key).nil? && !_without_caching
         if _set_default(key) then super(key)
-        else _value_or_exec(field(key)[:placeholder]) end
+        else _value_or_exec(fields[key].placeholder) end
       else
         super(key)
       end
@@ -53,18 +61,18 @@ class Triplicate < Hash
   end
   
   def []=(key, value)
-    if writeable?(key)
-      if !_raw and self[key].is_a?(Triplicate)
+    if fields[key].writeable?
+      if !_without_caching and self[key].is_a?(Triplicate)
         self[key].update(value)
       else
-        value = coerce(key, value)
-        super(key.to_s, value)
-        if value.is_a?(Triplicate)
+        coerced = fields[key].coerce(value)
+        super(key.to_s, coerced)
+        if coerced.is_a?(Triplicate)
           if @document[key.to_s].nil?
-            @document[key.to_s] = value.instance_variable_get(:@document)
+            @document[key.to_s] = coerced.instance_variable_get(:@document)
           end
         else
-          @document[key.to_s] = serialize(key, value)
+          @document[key.to_s] = fields[key].serialize(coerced)
         end
       end
       _cache_document
@@ -72,14 +80,11 @@ class Triplicate < Hash
   end
   
   def process!
-    each do |key, value|
-      if self[key] != coerce(key, value)
-        self[key] = coerce(key, value)
-      end
-    end
-    self.class.fields.each do |name, opts|
+    fields.each do |name, field|
+      coerced = field.coerce(self[name])
+      self[name] = coerced unless self[name] == coerced
       next if key?(name)
-      _set_default(name) if opts[:default]
+      _set_default(name) if field.default
     end
   end
   
@@ -94,70 +99,13 @@ class Triplicate < Hash
   end
   
   def to_ostruct
-    begin
-      OpenStruct.new(self)
-    rescue NameError
-      require 'ostruct'
-      retry
-    end
+    OpenStruct.new(self)
   end
-  
-  def field(key)
-    self.class.fields[key.to_s]
-  end
-  
-  def readable?(key)
-    field(key)[:read]
-  end
-  
-  def writeable?(key)
-    field(key)[:write]
-  end
-  
-  def collection?(key)
-    field(key)[:collection]
-  end
-  
-  def coercion(key)
-    field(key)[:coerce]
-  end
-  
-  def coerce(key, value, collecting=false)
-    if collection?(key) && ! collecting
-      value = [value] unless value.respond_to?(:each)
-      a = _build_collection key, value, :coerce
-    else
-      Triplicate::Coercion.coerce(value, coercion(key))
-    end
-  end
-  
-  def serialize(key, value, collecting=false)
-    if collection?(key) && ! collecting
-      value = [value] unless value.respond_to?(:each)
-      _build_collection key, value, :serialize
-    else
-      Triplicate::Coercion.serialize(value, coercion(key))
-    end
-  end
-  
-  def _build_collection(key, value, meth)
-    if collection?(key).ancestors.include?(Hash)
-      value.each {|k,v| value[k] = send(meth, key, v, true) }
-    elsif collection?(key).is_a?(Class)
-      send(meth, nil, collection?(key).new(value.map{|v| send(meth, key, v, true) }), true)
-    else
-      value.map {|val| send(meth, key, val, true) }
-    end
-  end
-  
-  def validations(key)
-    field(key)[:validate]
-  end
-  
+    
   def valid?(key=nil)
     if key
       value = self[key]
-      if collection?(key)
+      if fields[key].collection
         value.all? {|val| valid_value?(key, val) }
       else
         valid_value?(key, value)
@@ -168,7 +116,7 @@ class Triplicate < Hash
   end
   
   def valid_value?(key, value)
-    validations(key).all? do |set|
+    fields[key].validations.all? do |set|
       set.all? do |operation, target|
         case operation
         when :in
@@ -185,15 +133,17 @@ class Triplicate < Hash
   end
   
   def _cache_document
+    return if _without_caching
     @cached_document = @document.dup
   end
   
   def _cached(key, force=false)
+    return @document[key.to_s] if _without_caching
     if force
-      doc_value = @document[key]
+      doc_value = @document[key.to_s]
       if doc_value != nil && doc_value != _cached(key)
         _cache_document
-        _raw { self[key] = doc_value }
+        self[key] = doc_value
         self[key]
       end
     else
@@ -201,13 +151,13 @@ class Triplicate < Hash
     end
   end
   
-  def _raw(&block)
+  def _without_caching(&block)
     if block_given?
-      @raw_access = true
+      @nocache = true
       yield
-      @raw_access = nil
+      @nocache = nil
     else
-      @raw_access || nil
+      @nocache ||= nil
     end
   end
   
@@ -220,9 +170,10 @@ class Triplicate < Hash
   end
   
   def _set_default(key)
-    value = _value_or_exec field(key)[:default]
-    if value = coerce(key, value)
-      @document[key] = serialize(key, value)
+    value = _value_or_exec fields[key].default
+    return if value.nil?
+    if value = fields[key].coerce(value)
+      @document[key] = fields[key].serialize(value)
       _cached(key, true)
     end
   end

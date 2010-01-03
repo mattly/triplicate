@@ -84,3 +84,7 @@ Here's an example with a `Set` collection and validations:
     >> form[:emails] << doc["emails"].first
     >> form[:emails].size
     => 2
+
+## TODO
+
+* use coerce for handling values that aren't already a collection (f.e. Set)
