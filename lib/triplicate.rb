@@ -8,7 +8,7 @@ class Triplicate < Hash
     autoload mod, "lib/triplicate/#{req}"
   end
   
-  BUILTIN_VALIDATIONS = [:in, :not_in, :match, :against].freeze
+  BUILTIN_VALIDATIONS = [:in, :not_in, :match, :satisfy].freeze
   
   def self.field(*keys, &block)
     opts = keys.last.respond_to?(:has_key?) ? keys.pop : {}
@@ -27,18 +27,17 @@ class Triplicate < Hash
         opts[:coercion] = klass
       end
       
-      fields[key.to_s] = Field::Declaration.new(opts.update({:name => key.to_s, :parent => self}))
+      fields[key.to_s] = Field.new(opts.update({:name => key.to_s, :parent => self}))
     end
   end
   
   def self.fields
-    @fields ||= Hash.new {|h,k| k == k.to_s ? Field::Declaration.new : h[k.to_s] }
+    @fields ||= Hash.new {|h,k| k == k.to_s ? Field.new : h[k.to_s] }
   end
   
   def initialize(doc={})
     @document = doc || {}
-    _without_caching { @document.each {|key, value| self[key] = value } }
-    _cache_document
+    without_caching_document { @document.each {|key, value| self[key] = value } }
     fields.each do |name, field|
       next if @document.keys.include?(name)
       self[name] = field.collection.new if field.collection
@@ -50,10 +49,10 @@ class Triplicate < Hash
   def [](key)
     key = key.to_s
     if fields[key].readable?
-      _cached(key, true)
-      if super(key).nil? && !_without_caching
-        if _set_default(key) then super(key)
-        else _value_or_exec(fields[key].placeholder) end
+      cached_value(key, true)
+      if super(key).nil? && !without_caching_document
+        if set_default(key) then super(key)
+        else fields[key].placeholder_for(self) end
       else
         super(key)
       end
@@ -61,8 +60,8 @@ class Triplicate < Hash
   end
   
   def []=(key, value)
-    if fields[key].writeable?
-      if !_without_caching and self[key].is_a?(Triplicate)
+    if fields[key].writeable? and ! without_writing
+      if self[key].is_a?(Triplicate)
         self[key].update(value)
       else
         coerced = fields[key].coerce(value)
@@ -80,20 +79,25 @@ class Triplicate < Hash
   end
   
   def process!
-    fields.each do |name, field|
-      coerced = field.coerce(self[name])
-      self[name] = coerced unless self[name] == coerced
-      next if key?(name)
-      _set_default(name) if field.default
+    without_caching_document do
+      fields.each do |name, field|
+        coerced = field.coerce(self[name])
+        self[name] = coerced unless self[name] == coerced
+        next if key?(name)
+        set_default(name) if field.default
+      end
     end
+    valid?
   end
   
   def update(other, &block)
-    other.each do |key, value|
-      if key?(key.to_s) && block_given?
-        value = block.call(key, self[key], value)
+    without_caching_document do
+      other.each do |key, value|
+        if key?(key.to_s) && block_given?
+          value = block.call(key, self[key], value)
+        end
+        self[key] = value
       end
-      self[key] = value
     end
     self
   end
@@ -104,44 +108,22 @@ class Triplicate < Hash
     
   def valid?(key=nil)
     if key
-      value = self[key]
-      if fields[key].collection
-        value.all? {|val| valid_value?(key, val) }
-      else
-        valid_value?(key, value)
-      end
+      fields[key].valid_value?(self[key], self)
     else
       all? {|key, value| valid?(key) }
     end
   end
   
-  def valid_value?(key, value)
-    fields[key].validations.all? do |set|
-      set.all? do |operation, target|
-        case operation
-        when :in
-          target.respond_to?(:include?) && target.include?(value)
-        when :not_in
-          target.respond_to?(:include?) && ! target.include?(value)
-        when :match
-          target.respond_to?(:match) && target.match(value.to_s)
-        when :against
-          target.is_a?(Proc) && target.call(value, self)
-        end
-      end
-    end
-  end
-  
   def _cache_document
-    return if _without_caching
+    return if without_caching_document
     @cached_document = @document.dup
   end
   
-  def _cached(key, force=false)
-    return @document[key.to_s] if _without_caching
+  def cached_value(key, force=false)
+    return @document[key.to_s] if without_caching_document
     if force
       doc_value = @document[key.to_s]
-      if doc_value != nil && doc_value != _cached(key)
+      if doc_value != nil && doc_value != cached_value(key)
         _cache_document
         self[key] = doc_value
         self[key]
@@ -151,30 +133,38 @@ class Triplicate < Hash
     end
   end
   
-  def _without_caching(&block)
+  def without_caching_document(&block)
     if block_given?
-      @nocache = true
-      yield
-      @nocache = nil
+      begin
+        _cache_document
+        @without_caching_document = true
+        yield
+      ensure
+        @without_caching_document = nil
+        _cache_document
+      end
     else
-      @nocache ||= nil
+      @without_caching_document ||= nil
     end
   end
   
-  def _value_or_exec(thing)
-    if thing.is_a?(Proc)
-      to_ostruct.instance_eval(&thing)
+  def without_writing(&block)
+    if block_given?
+      begin
+        @without_writing = true
+        yield
+      ensure 
+        @without_writing = nil
+      end
     else
-      thing
+      @without_writing ||= nil
     end
   end
   
-  def _set_default(key)
-    value = _value_or_exec fields[key].default
-    return if value.nil?
-    if value = fields[key].coerce(value)
-      @document[key] = fields[key].serialize(value)
-      _cached(key, true)
+  def set_default(key)
+    value = fields[key].default_for(self)
+    if !value.nil?
+      without_caching_document { self[key] = value }
     end
   end
   

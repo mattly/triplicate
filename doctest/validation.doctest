@@ -71,13 +71,32 @@ Setting a valid value will clear the invalid status for the field:
     >> form[:name]
     => 1234
 
-`against`: Given a `Proc`, calls the proc with the value and the form as arguments:
+`satisfy`: Given a `Proc`, calls the proc with the value, instance_exec'd on an OpenStruct representation of the form:
 
-    >> Form.field :nickname, :against => lambda{|val, f| f[:name] != val }
+    >> Form.field :nickname, :satisfy => lambda{|val| name != val }
     >> form[:nickname] = form[:name]
     >> form.valid?(:nickname)
     => false
     >> form[:nickname] = "not the name"
     >> form.valid?(:nickname)
     => true
+
+In `Object#instance_exec` is not defined (as it isn't by default in Ruby versions 1.8.6 and earlier) **OR** the given proc's arity is 2, the proc will instead be called normally, with the OpenStruct representation of the form passed in as the second parameter:
+    
+    >> Form.field :nick, :satisfy => lambda{|val, doc| doc.name != val }
+    >> form[:nick] = form[:name]
+    >> form.valid?(:nick)
+    => false
+
+Given a `Symbol`, `:satisfy` calls the method name represented by the symbol on the form, with the value as an argument:
+    
+    >> class Form
+            def three?(val)
+                val == 3
+            end
+            field :three, :satisfy => :three?
+            end
+    >> form[:three] = 4
+    >> form.valid?(:three)
+    => false
     

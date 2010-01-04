@@ -37,6 +37,8 @@ Alternately, you can define default values. Provided there is no existing truthy
     => nil
     >> form[:language]
     => "English"
+    >> form
+    => {"language" => "English"}
     >> doc
     => {"language" => "English"}
 
@@ -50,21 +52,63 @@ If you supply a Proc to either `:placeholder` or `:default`, it will be instance
             end
     >> doc = {"value" => "thing"}
     >> form = Form.new(doc)
+    
     >> form[:empty]
     => "thing"
     >> form[:value] = "another"
     >> form[:empty]
     => "another"
-    >> doc["empty"]
-    => nil
+    >> form
+    => {"value" => "another"}
+    >> doc
+    => {"value" => "another"}
     
     >> form[:defaulted]
     => "another"
     >> form[:value] = "yet another"
     >> form[:defaulted]
     => "another"
-    >> doc["defaulted"]
-    => "another"
+    >> form
+    >> {"value" => "yet another", "defaulted" => "another"}
+    >> doc
+    => {"value" => "yet another", "defaulted" => "another"}
+
+You may also supply a Symbol representing a method name on your form to call. While the method is being called, write access is disabled to the form. 
+    
+    doctest: field definitions with default and placeholder symbols
+    >> class Form < Triplicate
+            def incrementer
+                @incrementer ||= 0
+                self[:incrementer] = @incrementer
+                @incrementer += 1
+            end
+            field :incrementer
+            field :a, :placeholder => :incrementer
+            field :b, :default => :incrementer
+            end
+    >> doc = {}
+    >> form = Form.new(doc)
+    
+    >> form[:a]
+    => 1
+    >> form
+    => {}
+    >> doc
+    => {}
+    
+    >> form[:b]
+    => 2
+    >> form
+    => {"b" => 2}
+    >> doc
+    => {"b" => 2}
+    >> form[:b]
+    => 2
+    >> form[:a]
+    => 3
+    >> doc
+    => {"b" => 2}
+    
 
 If you haven't yet accessed a field with a default by the time `#process!` is called, it will be set then:
     
