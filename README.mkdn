@@ -44,7 +44,6 @@ Triplicate aims to solve the complexity problem by providing a minimal layer of 
 * "prevent blind updates"
 * display fields (perhaps read-only, with defaults as procs?)
 * state machine
-* rework fields to own class/module, so they're not cluttering up triplicate.rb
 
 display :thing, ->{ "#{something}: #{else}" }
 

@@ -87,6 +87,7 @@ class Triplicate < Hash
         set_default(name) if field.default
       end
     end
+    on_processing if respond_to?(:on_processing)
     valid?
   end
   

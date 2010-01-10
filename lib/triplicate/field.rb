@@ -69,6 +69,7 @@ class Triplicate
       else
         validations.all? do |group|
           group.all? do |operation, target|
+            # TODO: Move to its own class
             case operation
             when :in
               target.respond_to?(:include?) && target.include?(value)
