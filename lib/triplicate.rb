@@ -5,7 +5,7 @@ class Triplicate < Hash
   
   %w(coercion field).each do |req|
     mod = req.split(/[-_]/).map{|w|w.capitalize}.join
-    autoload mod, "lib/triplicate/#{req}"
+    autoload mod, "#{File.dirname(__FILE__)}/triplicate/#{req}"
   end
   
   BUILTIN_VALIDATIONS = [:in, :not_in, :match, :satisfy].freeze
